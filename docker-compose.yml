@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: developer-directory-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: devdirectory
+    ports:
+      - "5332:5432"
+    volumes:
+      - developer-directory-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d devdirectory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  developer-directory-data:
