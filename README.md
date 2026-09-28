@@ -5,7 +5,7 @@ years of experience. Built as a layered Spring Boot application (controller →
 service → repository) backed by PostgreSQL running in Docker.
 
 Every response shown in this README was captured from a real run against a live
-Postgres container, not written by hand.
+Postgres container.
 
 ## Tech Stack
 
