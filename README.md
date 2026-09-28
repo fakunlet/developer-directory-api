@@ -17,7 +17,8 @@ Postgres container.
 | Spring Data JPA | Hibernate 6, `JpaRepository` |
 | Bean Validation | Hibernate Validator, request body constraints |
 | PostgreSQL | 16 (via Docker) |
-| Testing | JUnit 5, Mockito, MockMvc, AssertJ — 18 tests |
+| AWS S3 | AWS SDK for Java v2 — profile image storage |
+| Testing | JUnit 5, Mockito, MockMvc, AssertJ — 23 tests |
 | Build | Maven |
 | Containers | Docker + Docker Compose |
 
@@ -110,6 +111,8 @@ The API is then available at `http://localhost:8080/api/v1/developers`.
 | POST | `/api/v1/developers` | 201 + `Location` | — | 400 |
 | PUT | `/api/v1/developers/{id}` | 200 | 404 | 400 |
 | DELETE | `/api/v1/developers/{id}` | 204 | 404 | — |
+| POST | `/api/v1/developers/{id}/profile-image` | 204 | 404 | 400, 413 |
+| GET | `/api/v1/developers/{id}/profile-image` | 200 + image bytes | 404 | — |
 
 ### Validation rules
 
@@ -123,6 +126,27 @@ The API is then available at `http://localhost:8080/api/v1/developers`.
 
 A violation returns `400 Bad Request` listing every field that failed, so a
 client can fix all of them in one round trip rather than one at a time.
+
+### Profile images
+
+Images are stored in an S3 bucket and the database keeps only the object key, not
+the bytes. Storing files in a relational database bloats it, slows backups, and
+makes every read pay for data the query didn't need.
+
+| Rule | Behaviour |
+| --- | --- |
+| Missing or empty file | 400 `A file is required` |
+| Non-image content type | 400 `Only image files are allowed` |
+| Larger than 5MB | 413 `Image is too large (maximum 5MB)` |
+| Developer has no image yet | 404 `Developer {id} has no profile image` |
+
+The object key is `profile-images/{developerId}/{uuid}`. The UUID means a
+re-upload can never overwrite or collide with a previous image, and the developer
+id keeps the bucket readable when browsing it in the console.
+
+The upload happens *before* the key is written to the database. If S3 fails, the
+record still points at the previous image rather than at a key that was never
+written.
 
 ## Example Requests
 
@@ -373,12 +397,14 @@ mvn test
 
 ```
 Tests run: 10, Failures: 0, Errors: 0, Skipped: 0 -- DeveloperControllerTest
-Tests run: 8,  Failures: 0, Errors: 0, Skipped: 0 -- DeveloperServiceTest
-Tests run: 18, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 13, Failures: 0, Errors: 0, Skipped: 0 -- DeveloperServiceTest
+Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-**The tests do not require Docker or a running database.** `DeveloperServiceTest`
+**The tests do not require Docker, a running database, or AWS credentials.**
+`S3Service` is mocked, so the upload tests assert which key and content type would
+be sent to S3 without making a network call or costing anything. `DeveloperServiceTest`
 mocks the repository to test business rules in isolation, and
 `DeveloperControllerTest` uses `@WebMvcTest` with a mocked service to test the
 HTTP layer — status codes, JSON shape, the `Location` header, and validation
@@ -399,12 +425,35 @@ spring.datasource.password=devpass
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 spring.jpa.show-sql=true
+
+aws.region=${AWS_REGION:us-east-1}
+aws.s3.bucket=${AWS_S3_BUCKET:}
+spring.servlet.multipart.max-file-size=5MB
+spring.servlet.multipart.max-request-size=5MB
 ```
 
 `ddl-auto=update` is convenient for development but not appropriate for
 production, where a migration tool such as Flyway or Liquibase should own the
-schema. Credentials are committed here because this is a local-only development
-database; real deployments should supply them via environment variables.
+schema. Database credentials are committed here because this is a local-only
+development database; real deployments should supply them via environment
+variables.
+
+### AWS credentials
+
+Nothing AWS-related is committed. The bucket name comes from `AWS_S3_BUCKET`, and
+the SDK's `DefaultCredentialsProvider` resolves the keys from the environment or
+`~/.aws/credentials`, so no access key ever appears in the source.
+
+```powershell
+$env:AWS_S3_BUCKET     = "your-bucket-name"
+$env:AWS_REGION        = "us-east-1"
+$env:AWS_ACCESS_KEY_ID = "..."
+$env:AWS_SECRET_ACCESS_KEY = "..."
+mvn spring-boot:run
+```
+
+The rest of the API works without these; only the two profile image endpoints
+need them.
 
 ## Known limitations / next steps
 
@@ -419,8 +468,13 @@ Deliberately out of scope for this project, and what I'd add next:
   which won't hold up past a few thousand rows.
 - **Repository integration tests** against a real Postgres via Testcontainers.
   Current tests cover the service and web layers only.
-- **Externalised credentials** via environment variables.
+- **Externalised database credentials** via environment variables. AWS
+  credentials already work this way.
 - **`PATCH`** for partial updates, since `PUT` requires the full object.
+- **Deleting the S3 object** when a developer is deleted or their image is
+  replaced. Right now old objects are orphaned in the bucket.
+- **Presigned URLs** so clients fetch images straight from S3 instead of
+  streaming every byte through this API.
 
 ## Troubleshooting
 

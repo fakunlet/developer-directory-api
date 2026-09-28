@@ -29,6 +29,13 @@ public class Developer {
     @Max(value = 80, message = "yearsOfExperience must be 80 or less")
     private Integer yearsOfExperience;
 
+    // Only the S3 object key is stored here. The image bytes live in the bucket,
+    // because a relational database is a poor and expensive place to keep files.
+    private String profileImageKey;
+
+    // Saved on upload so downloads can report the right type instead of guessing.
+    private String profileImageContentType;
+
     public Developer() {
     }
 
@@ -69,6 +76,22 @@ public class Developer {
 
     public void setYearsOfExperience(Integer yearsOfExperience) {
         this.yearsOfExperience = yearsOfExperience;
+    }
+
+    public String getProfileImageKey() {
+        return profileImageKey;
+    }
+
+    public void setProfileImageKey(String profileImageKey) {
+        this.profileImageKey = profileImageKey;
+    }
+
+    public String getProfileImageContentType() {
+        return profileImageContentType;
+    }
+
+    public void setProfileImageContentType(String profileImageContentType) {
+        this.profileImageContentType = profileImageContentType;
     }
 
     @Override

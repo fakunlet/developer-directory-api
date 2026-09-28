@@ -19,7 +19,22 @@
 
     <properties>
         <java.version>17</java.version>
+        <aws.sdk.version>2.55.6</aws.sdk.version>
     </properties>
+
+    <!-- Spring Boot's parent doesn't manage AWS SDK versions, so import the
+         AWS BOM to keep every aws dependency on one consistent version. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -41,6 +56,11 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
         </dependency>
 
         <dependency>
